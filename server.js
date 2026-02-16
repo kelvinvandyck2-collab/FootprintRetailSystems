@@ -41,7 +41,11 @@ try {
     
     // Enable SSL for production environments or if connecting to a Supabase URL
     const isProduction = process.env.NODE_ENV === 'production';
-    const isSupabase = connStr && connStr.includes('supabase.co');
+    const isSupabase = connStr && (
+        connStr.includes('supabase.co') || 
+        connStr.includes('supabase.com') || 
+        connStr.includes('sslmode=require')
+    );
     const ssl = (isProduction || isSupabase) ? { rejectUnauthorized: false } : false;
 
     if (process.env.PGHOST || process.env.PGUSER || process.env.PGPASSWORD || process.env.PGDATABASE) {
@@ -59,7 +63,9 @@ try {
         try {
             console.log('Using DATABASE_URL (masked):', connStr.replace(/:(.*)@/, ':*****@'));
         } catch (e) { console.log('Using DATABASE_URL (masked)'); }
-        pool = new Pool({ connectionString: connStr, ssl });
+        // Remove sslmode=require from connection string to ensure our ssl config takes precedence
+        const connectionString = connStr.replace('sslmode=require', '');
+        pool = new Pool({ connectionString, ssl });
     } else {
         throw new Error('No database configuration found in environment. Set DATABASE_URL or PGHOST/PGUSER/PGPASSWORD/PGDATABASE.');
     }
@@ -123,6 +129,24 @@ async function initDb() {
 
             -- FIX: Sync branches_id_seq with the actual max id to prevent duplicate key errors
             SELECT setval(pg_get_serial_sequence('branches', 'id'), COALESCE((SELECT MAX(id) FROM branches), 1));
+
+            -- Create Products Table if not exists
+            CREATE TABLE IF NOT EXISTS products (
+                barcode VARCHAR(50) PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                category VARCHAR(100),
+                price DECIMAL(10,2) NOT NULL,
+                cost_price DECIMAL(10,2) DEFAULT 0,
+                selling_unit VARCHAR(50) DEFAULT 'Unit',
+                packaging_unit VARCHAR(50) DEFAULT 'Box',
+                conversion_rate DECIMAL(10,2) DEFAULT 1,
+                reorder_level INTEGER DEFAULT 10,
+                track_batch BOOLEAN DEFAULT TRUE,
+                track_expiry BOOLEAN DEFAULT TRUE,
+                stock_levels JSONB,
+                stock INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
 
             -- 1. Initialize stock_levels from stock if missing (Legacy support)
             UPDATE products 
@@ -205,6 +229,48 @@ async function initDb() {
                 total_discounted DECIMAL(10,2) DEFAULT 0.00,
                 UNIQUE(promotion_code, branch_id)
            );
+
+           -- Create Categories Table
+            CREATE TABLE IF NOT EXISTS categories (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                description TEXT,
+                branch_id INT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Create Suppliers Table
+            CREATE TABLE IF NOT EXISTS suppliers (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255) NOT NULL,
+                contact_person VARCHAR(100),
+                phone VARCHAR(50),
+                email VARCHAR(255),
+                address TEXT,
+                rating INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Create Purchase Orders Table
+            CREATE TABLE IF NOT EXISTS purchase_orders (
+                id SERIAL PRIMARY KEY,
+                supplier_id INTEGER,
+                status VARCHAR(50) DEFAULT 'Pending',
+                total_amount DECIMAL(10, 2) DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Create Transactions Table
+            CREATE TABLE IF NOT EXISTS transactions (
+                id SERIAL PRIMARY KEY,
+                user_id INTEGER,
+                store_location VARCHAR(100),
+                total_amount DECIMAL(10, 2),
+                payment_method VARCHAR(50),
+                receipt_number VARCHAR(100),
+                items JSONB,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
 
            -- Add branch_id to other inventory tables for isolation
            ALTER TABLE categories ADD COLUMN IF NOT EXISTS branch_id INT;
@@ -456,6 +522,9 @@ app.get('/inventory', (req, res) => {
 });
 app.get('/promotions', (req, res) => {
     res.sendFile(path.join(__dirname, 'promotions.html'));
+});
+app.get('/login', (req, res) => {
+    res.sendFile(path.join(__dirname, 'login.html'));
 });
 
 // Forgot Password Endpoint

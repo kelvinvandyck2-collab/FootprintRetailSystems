@@ -2,7 +2,13 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const connStr = process.env.DATABASE_URL;
+const ssl = connStr && (connStr.includes('sslmode=require') || connStr.includes('supabase')) 
+    ? { rejectUnauthorized: false } 
+    : false;
+
+// Remove sslmode=require to prevent conflict with ssl object
+const pool = new Pool({ connectionString: connStr.replace('sslmode=require', ''), ssl });
 
 const run = async () => {
     try {
