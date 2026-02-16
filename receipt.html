@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Footprint | Receipt</title>
+    <style>
+        body {
+            font-family: 'Courier New', Courier, monospace; /* Receipt look */
+            background: #f5f7fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+        .receipt-container {
+            background: white;
+            width: 350px; /* Typical thermal width approx */
+            padding: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        .text-center { text-align: center; }
+        .brand { font-weight: 700; font-size: 24px; margin-bottom: 5px; font-family: 'Montserrat', sans-serif; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        .store-info { font-size: 12px; margin-bottom: 15px; }
+        .meta { font-size: 12px; margin-bottom: 15px; border-bottom: 1px dashed #000; padding-bottom: 10px; }
+        .meta div { display: flex; justify-content: space-between; margin-bottom: 4px; }
+        
+        table { width: 100%; font-size: 12px; border-collapse: collapse; margin-bottom: 15px; }
+        th { text-align: left; border-bottom: 1px dashed #000; padding: 5px 0; }
+        td { padding: 5px 0; }
+        .price-col { text-align: right; }
+        
+        .totals { font-size: 12px; border-top: 1px dashed #000; padding-top: 10px; margin-bottom: 20px; }
+        .totals div { display: flex; justify-content: space-between; margin-bottom: 5px; }
+        .grand-total { font-weight: bold; font-size: 16px; margin-top: 5px; }
+        
+        .footer { text-align: center; font-size: 12px; margin-top: 20px; }
+        
+        .actions { margin-top: 30px; display: flex; gap: 10px; }
+        button {
+            flex: 1; padding: 12px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; color: white;
+        }
+        .btn-print { background: #333; }
+        .btn-new { background: #1a2a6c; }
+
+        @media print {
+            body { background: white; }
+            .receipt-container { box-shadow: none; width: 100%; margin: 0; padding: 0; }
+            .actions { display: none; }
+        }
+        @page {
+            margin: 0;
+            size: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="receipt-container">
+        <div class="text-center">
+            <div class="brand"><img src="logo.png" style="width: 30px; height: 30px; border-radius: 50%; object-fit: cover;"> FOOTPRINT</div>
+            <div class="store-info" id="storeInfo">
+                Loading Store...<br>
+                Tel: +233 55 555 5555
+            </div>
+        </div>
+
+        <div class="meta">
+            <div><span>Date:</span> <span id="rDate">...</span></div>
+            <div><span>Receipt #:</span> <span id="rId">...</span></div>
+            <div><span>Cashier:</span> <span id="rCashier">...</span></div>
+            <div><span>Payment:</span> <span id="rMethod">...</span></div>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Item</th>
+                    <th>Qty</th>
+                    <th class="price-col">Price</th>
+                </tr>
+            </thead>
+            <tbody id="rItems"></tbody>
+        </table>
+
+        <div class="totals">
+            <div><span>Subtotal</span> <span id="rSub">0.00</span></div>
+            <div><span>Discount</span> <span id="rDisc">0.00</span></div>
+            <div><span id="rVatLabel">VAT</span> <span id="rVat">0.00</span></div>
+            <div class="grand-total"><span>TOTAL</span> <span id="rTotal">0.00</span></div>
+            <div id="changeRow" style="display:none; margin-top:5px;"><span>Change</span> <span id="rChange">0.00</span></div>
+        </div>
+
+        <div class="footer" id="rFooter">
+            Thank you for shopping with us!<br>
+            Powered by Footprint POS
+        </div>
+
+        <div class="actions">
+            <button class="btn-print" onclick="window.print()">Print</button>
+            <button class="btn-new" onclick="newSale()">New Sale</button>
+        </div>
+    </div>
+
+    <script>
+        const urlParams = new URLSearchParams(window.location.search);
+        let transactionId = urlParams.get('id');
+
+        if (transactionId) {
+            sessionStorage.setItem('currentReceiptId', transactionId);
+            window.history.replaceState({}, document.title, window.location.pathname);
+        } else {
+            transactionId = sessionStorage.getItem('currentReceiptId');
+        }
+        
+        if (!transactionId) {
+            alert("No transaction ID");
+            window.location.href = 'pos';
+        }
+
+        const token = sessionStorage.getItem('authToken');
+        
+        // Load Settings first
+        fetch('/api/settings', { headers: { 'Authorization': `Bearer ${token}` } })
+            .then(res => res.json())
+            .then(settings => {
+                if (settings.store_name) {
+                    document.querySelector('.store-info').innerHTML = `<strong>${settings.store_name}</strong><br>Tel: +233 55 555 5555`;
+                }
+                if (settings.receipt_footer) {
+                    document.getElementById('rFooter').innerHTML = settings.receipt_footer.replace(/\n/g, '<br>');
+                }
+            }).catch(e => console.error(e));
+
+        fetch(`/transactions/${transactionId}`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(res => res.json())
+            .then(sale => {
+                // Populate Info
+                document.getElementById('rDate').textContent = new Date(sale.created_at).toLocaleString();
+                document.getElementById('rId').textContent = sale.receipt_number;
+                document.getElementById('rCashier').textContent = sale.cashier_name || 'Teller';
+
+                document.getElementById('rMethod').textContent = (sale.payment_method || 'Cash').toUpperCase();
+
+                // Items
+                const tbody = document.getElementById('rItems');
+                const items = sale.items || [];
+                items.forEach(item => {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td>${item.name}</td>
+                        <td>${item.qty}</td>
+                        <td class="price-col">₵${(item.price * item.qty).toFixed(2)}</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                // Totals
+                document.getElementById('rSub').textContent = '₵' + parseFloat(sale.subtotal).toFixed(2);
+                document.getElementById('rDisc').textContent = '-₵' + parseFloat(sale.discount).toFixed(2);
+                document.getElementById('rVat').textContent = '₵' + parseFloat(sale.tax).toFixed(2);
+                document.getElementById('rTotal').textContent = '₵' + parseFloat(sale.total_amount).toFixed(2);
+                
+                // Calculate VAT rate for label
+                const taxRate = sale.vatRate || ((parseFloat(sale.tax) / parseFloat(sale.subtotal - sale.discount)) * 100);
+                if (taxRate) document.getElementById('rVatLabel').textContent = `VAT (${Math.round(taxRate)}%)`;
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Error loading receipt");
+            });
+
+        function newSale() {
+            window.location.href = 'pos';
+        }
+    </script>
+</body>
+</html>
