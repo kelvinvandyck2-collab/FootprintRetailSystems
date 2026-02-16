@@ -904,6 +904,14 @@ app.post('/login', [
         let redirectTo = '/open-shift';
         if (userRole === 'admin' || userRole === 'manager') redirectTo = '/dashboard';
         if (userRole === 'ceo') redirectTo = '/ceo-portal';
+
+        // Check for active shift for cashiers to prevent flash
+        if (userRole === 'cashier' || userRole === 'teller') {
+            const activeShift = await pool.query('SELECT id FROM shifts WHERE user_id = $1 AND end_time IS NULL', [user.id]);
+            if (activeShift.rows.length > 0) {
+                redirectTo = '/pos';
+            }
+        }
         
         res.json({ 
             success: true,
