@@ -1554,7 +1554,8 @@
                 // Get stock ONLY for user's branch (ENFORCED)
                 let branchStock = p.stock_levels[userBranch] || 0;
 
-                const stockClass = branchStock <= 10 ? 'stock-low' : 'stock-ok';
+                const reorderLevel = p.reorder_level !== undefined && p.reorder_level !== null ? p.reorder_level : 10;
+                const stockClass = branchStock <= reorderLevel ? 'stock-low' : 'stock-ok';
                 const row = `
                     <tr>
                         <td style="text-align: center;"><input type="checkbox" class="stock-check" value="${p.barcode}"></td>
@@ -1713,7 +1714,8 @@
 
                 const matchesSearch = name.includes(searchText) || barcode.includes(searchText);
                 const matchesCategory = category === '' || rowCategory === category;
-                const matchesStock = !lowStockOnly || stock <= 10;
+                const reorderLevel = p.reorder_level !== undefined && p.reorder_level !== null ? p.reorder_level : 10;
+                const matchesStock = !lowStockOnly || stock <= reorderLevel;
 
                 return matchesSearch && matchesCategory && matchesStock;
             });
