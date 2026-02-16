@@ -526,6 +526,78 @@ app.get('/promotions', (req, res) => {
 app.get('/login', (req, res) => {
     res.sendFile(path.join(__dirname, 'login.html'));
 });
+app.get('/dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'dashboard.html'));
+});
+app.get('/ceo-portal', (req, res) => {
+    res.sendFile(path.join(__dirname, 'ceo-portal.html'));
+});
+app.get('/open-shift', (req, res) => {
+    res.sendFile(path.join(__dirname, 'open-shift.html'));
+});
+app.get('/sales-dashboard', (req, res) => {
+    res.sendFile(path.join(__dirname, 'sales-dashboard.html'));
+});
+app.get('/profitability', (req, res) => {
+    res.sendFile(path.join(__dirname, 'profitability.html'));
+});
+app.get('/pos-register', (req, res) => {
+    res.sendFile(path.join(__dirname, 'pos-register.html'));
+});
+app.get('/credit-customers', (req, res) => {
+    res.sendFile(path.join(__dirname, 'credit-customers.html'));
+});
+app.get('/reports', (req, res) => {
+    res.sendFile(path.join(__dirname, 'reports.html'));
+});
+app.get('/settings', (req, res) => {
+    res.sendFile(path.join(__dirname, 'settings.html'));
+});
+app.get('/bulk-upload', (req, res) => {
+    res.sendFile(path.join(__dirname, 'bulk-upload.html'));
+});
+app.get('/categories', (req, res) => {
+    res.sendFile(path.join(__dirname, 'categories.html'));
+});
+app.get('/close-shift', (req, res) => {
+    res.sendFile(path.join(__dirname, 'close-shift.html'));
+});
+app.get('/customer-display', (req, res) => {
+    res.sendFile(path.join(__dirname, 'customer-display.html'));
+});
+app.get('/customers', (req, res) => {
+    res.sendFile(path.join(__dirname, 'customers.html'));
+});
+app.get('/forgot-password', (req, res) => {
+    res.sendFile(path.join(__dirname, 'forgot-password.html'));
+});
+app.get('/locations', (req, res) => {
+    res.sendFile(path.join(__dirname, 'locations.html'));
+});
+app.get('/payment', (req, res) => {
+    res.sendFile(path.join(__dirname, 'payment.html'));
+});
+app.get('/pos', (req, res) => {
+    res.sendFile(path.join(__dirname, 'pos.html'));
+});
+app.get('/profile', (req, res) => {
+    res.sendFile(path.join(__dirname, 'profile.html'));
+});
+app.get('/purchase-orders', (req, res) => {
+    res.sendFile(path.join(__dirname, 'purchase-orders.html'));
+});
+app.get('/receipt', (req, res) => {
+    res.sendFile(path.join(__dirname, 'receipt.html'));
+});
+app.get('/reset-password', (req, res) => {
+    res.sendFile(path.join(__dirname, 'reset-password.html'));
+});
+app.get('/suppliers', (req, res) => {
+    res.sendFile(path.join(__dirname, 'suppliers.html'));
+});
+app.get('/transactions', (req, res) => {
+    res.sendFile(path.join(__dirname, 'transactions.html'));
+});
 
 // Forgot Password Endpoint
 app.post('/forgot-password', async (req, res) => {

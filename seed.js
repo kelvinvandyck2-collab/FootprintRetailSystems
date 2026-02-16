@@ -225,6 +225,26 @@ const run = async () => {
                 ['Chief Executive Officer', ceoEmail, ceoHash, 'ceo', 'Headquarters']
             );
             console.log(`CEO created successfully.\nEmail: ${ceoEmail}\nStore: Headquarters`);
+        } else {
+            await pool.query('UPDATE users SET password = $1, role = $3, store_location = $4 WHERE email = $2', [ceoHash, ceoEmail, 'ceo', 'Headquarters']);
+            console.log(`CEO user updated.`);
+        }
+
+        // Create Manager User
+        const managerEmail = 'manager@footprint.com';
+        const managerPass = process.env.DEFAULT_MANAGER_PASS || 'manager123';
+        const managerHash = await bcrypt.hash(managerPass, 10);
+        const managerRes = await pool.query('SELECT * FROM users WHERE email = $1', [managerEmail]);
+
+        if (managerRes.rows.length === 0) {
+            await pool.query(
+                'INSERT INTO users (name, email, password, role, store_location) VALUES ($1, $2, $3, $4, $5)',
+                ['Store Manager', managerEmail, managerHash, 'manager', 'Accra Branch']
+            );
+            console.log(`Manager created successfully.\nEmail: ${managerEmail}\nStore: Accra Branch`);
+        } else {
+            await pool.query('UPDATE users SET password = $1, role = $3, store_location = $4 WHERE email = $2', [managerHash, managerEmail, 'manager', 'Accra Branch']);
+            console.log(`Manager user updated.`);
         }
     } catch (e) {
         console.error('Error seeding database:', e);

@@ -58,3 +58,10 @@ This project is configured for deployment on **Vercel**.
 
 For cloud providers like Supabase or Neon, use the pooled connection string they provide for the `DATABASE_URL` variable. It will look something like this:
 `DATABASE_URL=postgres://user:password@host.pooler.supabase.com:6543/postgres?sslmode=require`
+
+## Database Seeding
+
+To populate the database with default users (Admin, CEO, Cashier), run:
+```bash
+node seed.js
+```
