@@ -193,9 +193,26 @@
         document.getElementById('displayEmail').textContent = user.email;
         document.getElementById('displayStore').textContent = user.store_location || 'Not Assigned';
 
-        function goBack() { 
-            if (user.role === 'admin' || user.role === 'manager') window.location.href = 'dashboard';
-            else window.location.href = 'open-shift';
+        async function goBack() {
+            const token = sessionStorage.getItem('authToken');
+            if (user.role === 'admin' || user.role === 'manager') {
+                window.location.href = 'dashboard';
+            } else {
+                // For cashiers, check if a shift is active
+                try {
+                    const res = await fetch('/api/shifts/active', {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (res.ok) {
+                        const shiftData = await res.json();
+                        window.location.href = shiftData.active ? 'pos' : 'open-shift';
+                    } else {
+                        window.location.href = 'open-shift'; // Default
+                    }
+                } catch (e) {
+                    window.location.href = 'open-shift'; // Default on error
+                }
+            }
         }
         async function logout() { 
             try { 

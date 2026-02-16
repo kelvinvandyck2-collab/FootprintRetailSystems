@@ -418,6 +418,175 @@ async function initDb() {
             AND u.store_id IS NULL;
         `);
 
+        // --- ENHANCED INVENTORY TABLES (Fix for 500 Errors) ---
+        await pool.query(`
+            -- Shelf Management
+            CREATE TABLE IF NOT EXISTS shelf_inventory (
+                id SERIAL PRIMARY KEY,
+                product_barcode VARCHAR(50),
+                quantity_on_shelf INTEGER DEFAULT 0,
+                store_quantity INTEGER DEFAULT 0,
+                branch_id INTEGER,
+                last_verified TIMESTAMP,
+                staff_id INTEGER,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(product_barcode, branch_id)
+            );
+            
+            -- Fix: Ensure branch_id exists on shelf_inventory (Migration for existing tables)
+            ALTER TABLE shelf_inventory ADD COLUMN IF NOT EXISTS branch_id INTEGER;
+            
+            -- Fix: Update unique constraint to include branch_id if it was previously just product_barcode
+            DO $$ BEGIN
+                IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'shelf_inventory_product_barcode_key') THEN
+                    ALTER TABLE shelf_inventory DROP CONSTRAINT shelf_inventory_product_barcode_key;
+                    ALTER TABLE shelf_inventory ADD CONSTRAINT shelf_inventory_product_barcode_branch_id_key UNIQUE (product_barcode, branch_id);
+                END IF;
+            END $$;
+
+            CREATE TABLE IF NOT EXISTS shelf_movements (
+                id SERIAL PRIMARY KEY,
+                product_barcode VARCHAR(50),
+                movement_type VARCHAR(50),
+                quantity INTEGER,
+                staff_id INTEGER,
+                from_location VARCHAR(100),
+                to_location VARCHAR(100),
+                branch_id INTEGER,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Stock Adjustments
+            CREATE TABLE IF NOT EXISTS stock_adjustments (
+                id SERIAL PRIMARY KEY,
+                product_barcode VARCHAR(50),
+                adjustment_type VARCHAR(50),
+                quantity_adjusted INTEGER,
+                reason TEXT,
+                approver_id INTEGER,
+                branch_id INTEGER,
+                approved_at TIMESTAMP,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Stock Takes
+            CREATE TABLE IF NOT EXISTS stock_takes (
+                id SERIAL PRIMARY KEY,
+                stock_take_date DATE,
+                branch_id INTEGER,
+                created_by INTEGER,
+                approved_by INTEGER,
+                status VARCHAR(50) DEFAULT 'In Progress',
+                variance_total DECIMAL(10,2),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                completed_at TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS stock_take_items (
+                id SERIAL PRIMARY KEY,
+                stock_take_id INTEGER REFERENCES stock_takes(id) ON DELETE CASCADE,
+                product_barcode VARCHAR(50),
+                physical_count INTEGER,
+                system_count INTEGER,
+                variance INTEGER,
+                variance_reason VARCHAR(255),
+                counted_by VARCHAR(100),
+                counted_at TIMESTAMP
+            );
+
+            -- Reorder Alerts
+            CREATE TABLE IF NOT EXISTS reorder_alerts (
+                id SERIAL PRIMARY KEY,
+                product_barcode VARCHAR(50),
+                current_stock INTEGER,
+                reorder_level INTEGER,
+                suggested_quantity INTEGER,
+                priority VARCHAR(20),
+                status VARCHAR(50) DEFAULT 'Active',
+                branch_id INTEGER,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                acknowledged_at TIMESTAMP,
+                UNIQUE(product_barcode)
+            );
+
+            -- Inventory Audit Log
+            CREATE TABLE IF NOT EXISTS inventory_audit_log (
+                id SERIAL PRIMARY KEY,
+                action_type VARCHAR(100),
+                product_barcode VARCHAR(50),
+                quantity_before INTEGER,
+                quantity_after INTEGER,
+                reference_id INTEGER,
+                reference_type VARCHAR(50),
+                user_id INTEGER,
+                branch_id INTEGER,
+                notes TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+            
+            -- Goods Received
+            CREATE TABLE IF NOT EXISTS goods_received (
+                id SERIAL PRIMARY KEY,
+                po_id INTEGER,
+                product_barcode VARCHAR(50),
+                quantity_received INTEGER,
+                quantity_packaging_units INTEGER,
+                unit_cost DECIMAL(10,2),
+                batch_number VARCHAR(100),
+                expiry_date DATE,
+                received_by INTEGER,
+                invoice_number VARCHAR(100),
+                branch_id INTEGER,
+                received_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Ensure stock_transfers has all columns
+            ALTER TABLE stock_transfers ADD COLUMN IF NOT EXISTS branch_id INT;
+            ALTER TABLE stock_transfers ADD COLUMN IF NOT EXISTS confirmed_by INT;
+            ALTER TABLE stock_transfers ADD COLUMN IF NOT EXISTS confirmed_at TIMESTAMP;
+            ALTER TABLE stock_transfers ADD COLUMN IF NOT EXISTS notes TEXT;
+
+            CREATE TABLE IF NOT EXISTS stock_transfer_items (
+                id SERIAL PRIMARY KEY,
+                transfer_id INTEGER REFERENCES stock_transfers(id) ON DELETE CASCADE,
+                product_barcode VARCHAR(50),
+                quantity_sent INTEGER,
+                quantity_received INTEGER,
+                unit_cost DECIMAL(10,2),
+                batch_number VARCHAR(100),
+                expiry_date DATE
+            );
+            
+            -- Price Lists
+            CREATE TABLE IF NOT EXISTS price_lists (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(100) NOT NULL,
+                list_type VARCHAR(50),
+                branch_id INTEGER,
+                effective_date DATE,
+                status VARCHAR(20) DEFAULT 'Active',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE IF NOT EXISTS price_list_items (
+                id SERIAL PRIMARY KEY,
+                price_list_id INTEGER REFERENCES price_lists(id) ON DELETE CASCADE,
+                product_barcode VARCHAR(50),
+                markup_percentage DECIMAL(5,2),
+                selling_price DECIMAL(10,2),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            -- Ensure unique constraint on product_batches for ON CONFLICT clauses
+            DO $$ BEGIN
+                IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'product_batches_barcode_batch_branch_key') THEN
+                    ALTER TABLE product_batches ADD CONSTRAINT product_batches_barcode_batch_branch_key UNIQUE (product_barcode, batch_number, branch_id);
+                END IF;
+            END $$;
+        `);
+
         // Create Default CEO User if not exists
         const ceoCheck = await pool.query("SELECT id FROM users WHERE email = 'ceo@footprint.com'");
         if (ceoCheck.rows.length === 0) {
@@ -485,7 +654,10 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // Middleware to verify JWT token or Session (Hybrid approach)
 const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
+    let token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
+
+    // Fix: Handle string "null" or "undefined" sent by client when storage is empty
+    if (token === 'null' || token === 'undefined') token = null;
 
     if (token) {
         jwt.verify(token, JWT_SECRET, (err, user) => {

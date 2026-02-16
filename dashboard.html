@@ -310,9 +310,7 @@
             const userRole = user.role ? user.role.toLowerCase() : '';
             // Verify admin or manager role
             if (userRole !== 'admin' && userRole !== 'manager') {
-                if (userRole === 'cashier' || userRole === 'teller') {
-                    window.location.href = 'open-shift';
-                } else {
+                if (userRole === 'cashier' || userRole === 'teller') {                    checkShiftAndRedirect();                } else {
                     window.location.href = '/login';
                 }
                 return;
@@ -324,6 +322,27 @@
             
             // Load dashboard data
             loadDashboardData();
+        }
+
+        async function checkShiftAndRedirect() {
+            const token = sessionStorage.getItem('authToken');
+            try {
+                const res = await fetch('/api/shifts/active', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const shiftData = await res.json();
+                    if (shiftData.active) {
+                        window.location.href = 'pos';
+                    } else {
+                        window.location.href = 'open-shift';
+                    }
+                } else {
+                    window.location.href = 'open-shift';
+                }
+            } catch (e) {
+                window.location.href = 'open-shift';
+            }
         }
 
         async function loadDashboardData() {
